@@ -1,8 +1,6 @@
 from hls4ml.model.hls_model import HLSModel
 from hls4ml.model.hls_layers import IntegerPrecisionType, FixedPrecisionType
 import numpy as np
-import pandas
-import seaborn as sb
 import uuid
 import os
 import shutil
@@ -39,6 +37,24 @@ try:
     __torch_profiling_enabled__ = True
 except ImportError:
     __torch_profiling_enabled__ = False
+
+
+def _check_plt():
+    if not __plt_present__:
+        raise RuntimeError("matplotlib could not be imported. Have you installed it by installing hls4ml[profiling] "
+                           "or otherwise?")
+
+
+def _check_pandas():
+    if not __pandas_present__:
+        raise RuntimeError("pandas could not be imported. Have you installed it by installing hls4ml[profiling] "
+                           "or otherwise?")
+
+
+def _check_seaborn():
+    if not __seaborn_present__:
+        raise RuntimeError("seaborn could not be imported. Have you installed it by installing hls4ml[profiling] "
+                           "or otherwise?")
 
 
 def get_unoptimized_hlsmodel(model):
@@ -278,6 +294,30 @@ def weights_hlsmodel(model, fmt='longform', plot='boxplot'):
     return data
 
 
+def activations_hlsmodel(model, X, fmt='summary', plot='boxplot'):
+    if fmt == 'longform':
+        raise NotImplemented
+    elif fmt == 'summary':
+        data = []
+
+    _, trace = model.trace(np.ascontiguousarray(X))
+
+    if len(trace) == 0:
+        raise RuntimeError("HLSModel must have tracing on for at least 1 layer (this can be set in its config)")
+
+    for layer in trace.keys():
+        print("   {}".format(layer))
+
+        if fmt == 'summary':
+            y = trace[layer].flatten()
+            y = abs(y[y != 0])
+
+            data.append(array_to_summary(y, fmt=plot))
+            data[-1]['weight'] = layer
+
+    return data
+
+
 def _keras_batchnorm(layer):
     weights = layer.get_weights()
     epsilon = layer.epsilon
@@ -487,6 +527,7 @@ def numerical(model=None, hls_model=None, X=None, plot='boxplot'):
         respectively. (Optimizations are applied to an HLSModel by hls4ml,
         a post-optimization HLSModel is a final model)
     """
+    _check_plt()
     wp, wph, ap, aph = None, None, None, None
 
     hls_model_present = hls_model is not None and isinstance(hls_model, HLSModel)
@@ -736,7 +777,7 @@ def compare(keras_model, hls_model, X, plot_type = "dist_diff"):
     #Note that each y is a dictionary with structure {"layer_name": flattened ouput array}
     ymodel = get_ymodel_keras(keras_model, X)
     _, ysim = hls_model.trace(X)
-    
+
     print("Plotting difference...")
     f = plt.figure()
     if plot_type == "norm_diff":

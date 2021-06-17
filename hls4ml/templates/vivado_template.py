@@ -426,6 +426,7 @@ class VivadoBackend(Backend):
         self.register_templates('GarNet'                 , garnet_function_template,      garnet_config_template, garnet_include_list)
         self.register_templates('GarNetStack'            , garnet_stack_function_template,garnet_stack_config_template, garnet_include_list)
         self.register_templates('KLLoss'                 , distance_function_template    , distance_config_template, distance_include_list)
+        self.register_templates('CustomMSE'                 , distance_function_template    , distance_config_template, distance_include_list)
     
     def get_valid_reuse_factors(self, layer):
         n_in = 0
@@ -515,6 +516,30 @@ class VivadoBackend(Backend):
 
             layer.reuse_factor = float(rf) / kernel_multiplies
 
+
+    def divisorGenerator(self, n):
+        large_divisors = []
+        for i in range(1, int(math.sqrt(n) + 1)):
+            if n % i == 0:
+                yield i
+                if i*i != n:
+                    large_divisors.append(n // i)
+        for divisor in reversed(large_divisors):
+            yield divisor
+
+    def set_closest_parallelization_factor(self, layer):
+        if 'Conv1D' in layer.__class__.__name__:
+            n_in = layer.get_attr('out_width')
+        elif 'Conv2D' in layer.__class__.__name__:
+            n_in = layer.get_attr('out_height') * layer.get_attr('out_width')
+
+        valid_pf = list(self.divisorGenerator(n_in))
+        chosen_pf = layer.parallelization_factor
+        if chosen_pf not in valid_pf:
+            closest_pf = self.get_closest_reuse_factor(valid_pf, chosen_pf)
+            print('INFO: Setting ParallelizationFactor={} in layer {}. Valid ParallelizationFactor(s): {}.'
+                .format(closest_pf, layer.name, ','.join(map(str, valid_pf))))
+            layer.parallelization_factor = closest_pf
 
     def divisorGenerator(self, n):
         large_divisors = []

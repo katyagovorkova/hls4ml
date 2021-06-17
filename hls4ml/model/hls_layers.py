@@ -870,6 +870,7 @@ class Conv2D(Layer):
             if self.model.config.backend.name == 'Vivado':
                 #self.model.config.backend.set_closest_reuse_factor(self)
                 #self.weights['weight'].data = np.transpose(self.weights['weight'].data, axes=[3, 2, 0, 1]) #(H,W,C,F) => (F,C,H,W)
+                #self.weights['weight'].data = np.transpose(self.weights['weight'].data, axes=[3, 0, 1, 2]) #(H,W,C,F) => (F,H,W,C)
                 self.generated_code = self.model.config.backend.generate_conv2d_line_buffer_fn(
                     self.index,
                     self.get_input_variable().shape[0],
@@ -1833,14 +1834,42 @@ class KLLoss(Layer):
     def initialize(self):
         assert(len(self.inputs) == 2)
         self.add_output_variable(shape=[1], dim_names=['KL_LOSS_{}'.format(self.index)])
-        
+
         print(self.attributes)
         if 'sum_t' not in self.attributes:
-            self.set_attr('sum_t', self.get_attr('accum_t'))        
+            self.set_attr('sum_t', self.get_attr('accum_t'))
         if 'exp_table_t' not in self.attributes:
             self.set_attr('exp_table_t', FixedPrecisionType(width=18, integer=8))
         if 'table_size' not in self.attributes:
             self.set_attr('table_size', 1024)
+
+    def function_cpp(self):
+        params = {}
+        params['distance'] = 'klloss'
+        params['config'] = 'config{}'.format(self.index)
+        params['input1_t'] = self.get_input_variable(self.inputs[0]).type.name
+        params['input2_t'] = self.get_input_variable(self.inputs[1]).type.name
+        params['output_t'] = self.get_output_variable().type.name
+        params['input1'] = self.get_input_variable(self.inputs[0]).name
+        params['input2'] = self.get_input_variable(self.inputs[1]).name
+        params['output'] = self.get_output_variable().name
+
+        return [self._function_template.format(**params)]
+
+    def config_cpp(self):
+        params = self._default_config_params()
+        params['n_in'] = self.get_input_variable(self.inputs[0]).shape[0]
+        params['n_out'] = 1
+        return self._config_template.format(**params)
+
+class CustomMSE(Layer):
+    def initialize(self):
+        assert(len(self.inputs) == 2)
+        self.add_output_variable(shape=[1], dim_names=['CUSTOM_MSE_{}'.format(self.index)])
+
+        print(self.attributes)
+        if 'sum_t' not in self.attributes:
+            self.set_attr('sum_t', self.get_attr('accum_t'))
 
     def function_cpp(self):
         params = {}
@@ -1906,6 +1935,7 @@ layer_map = {
     'GarNet'                 : GarNet,
     'GarNetStack'            : GarNetStack,
     'KLLoss'                 : KLLoss,
+    'CustomMSE'              : CustomMSE,
     # TensorFlow-specific layers:
     'BiasAdd'                : BiasAdd,
 }

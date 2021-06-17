@@ -35,7 +35,6 @@ void init_klloss_exp_table(typename CONFIG_T::exp_table_t table_out[N_TABLE])
     }
 }
 
-
 template<class data1_T, class data2_T, class res_T, typename CONFIG_T>
 void klloss(
     data1_T mean[CONFIG_T::n_in],
